@@ -102,7 +102,7 @@ resource "dns_ns_record_set" "this" {
   nameservers = local.ns_recordsets[count.index].records
 }
 
-resource "dns_cname_record" "ptr" {
+resource "dns_ptr_record" "this" {
   count = length(local.ptr_records)
 
   zone = local.zone_name
