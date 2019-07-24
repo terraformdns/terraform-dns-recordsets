@@ -14,12 +14,21 @@ locals {
   # requires it so we'll add it now.
   zone_name = "${var.zone_name}."
 
-  recordsets       = {for rs in var.recordsets : rs.type => rs ...}
+  recordsets       = { for rs in var.recordsets : rs.type => rs... }
   a_recordsets     = lookup(local.recordsets, "A", [])
   aaaa_recordsets  = lookup(local.recordsets, "AAAA", [])
   cname_recordsets = lookup(local.recordsets, "CNAME", [])
-  ns_recordsets    = lookup(local.recordsets, "NS", [])
-  ptr_recordsets   = lookup(local.recordsets, "PTR", [])
+  ns_recordsets = [
+    for rs in lookup(local.recordsets, "NS", []) : {
+      name = rs.name
+      type = rs.type
+      ttl  = rs.ttl
+      records = [
+        for d in rs.records : substr(d, length(d) - 1, 1) == "." ? d : "${d}.${local.zone_name}"
+      ]
+    }
+  ]
+  ptr_recordsets = lookup(local.recordsets, "PTR", [])
 
   # Some of the resources only deal with one record at a time, and so we need
   # to flatten these.
@@ -29,7 +38,7 @@ locals {
         name = rs.name
         type = rs.type
         ttl  = rs.ttl
-        data = r
+        data = substr(r, length(r) - 1, 1) == "." ? r : "${r}.${local.zone_name}"
       }
     ]
   ])
@@ -63,51 +72,51 @@ locals {
 }
 
 resource "dns_a_record_set" "this" {
-  count = length(local.a_recordsets)
+  for_each = { for rs in local.a_recordsets : rs.name => rs }
 
   zone = local.zone_name
 
-  name      = coalesce(local.a_recordsets[count.index].name, "@")
-  ttl       = local.a_recordsets[count.index].ttl
-  addresses = local.a_recordsets[count.index].records
+  name      = coalesce(each.value.name, "@")
+  ttl       = each.value.ttl
+  addresses = each.value.records
 }
 
 resource "dns_aaaa_record_set" "this" {
-  count = length(local.aaaa_recordsets)
+  for_each = { for rs in local.aaaa_recordsets : rs.name => rs }
 
   zone = local.zone_name
 
-  name      = coalesce(local.aaaa_recordsets[count.index].name, "@")
-  ttl       = local.aaaa_recordsets[count.index].ttl
-  addresses = local.aaaa_recordsets[count.index].records
+  name      = coalesce(each.value.name, "@")
+  ttl       = each.value.ttl
+  addresses = each.value.records
 }
 
 resource "dns_cname_record" "this" {
-  count = length(local.cname_records)
+  for_each = { for r in local.cname_records : "${r.name}:${r.data}" => r }
 
   zone = local.zone_name
 
-  name  = coalesce(local.cname_records[count.index].name, "@")
-  ttl   = local.cname_records[count.index].ttl
-  cname = local.cname_records[count.index].data
+  name  = coalesce(each.value.name, "@")
+  ttl   = each.value.ttl
+  cname = each.value.data
 }
 
 resource "dns_ns_record_set" "this" {
-  count = length(local.ns_recordsets)
+  for_each = { for rs in local.ns_recordsets : rs.name => rs }
 
   zone = local.zone_name
 
-  name        = coalesce(local.ns_recordsets[count.index].name, "@")
-  ttl         = local.ns_recordsets[count.index].ttl
-  nameservers = local.ns_recordsets[count.index].records
+  name        = coalesce(each.value.name, "@")
+  ttl         = each.value.ttl
+  nameservers = each.value.records
 }
 
 resource "dns_ptr_record" "this" {
-  count = length(local.ptr_records)
+  for_each = { for r in local.ptr_records : "${r.name}:${r.data}" => r }
 
   zone = local.zone_name
 
-  name = coalesce(local.ptr_records[count.index].name, "@")
-  ttl  = local.ptr_records[count.index].ttl
-  ptr  = local.ptr_records[count.index].data
+  name = coalesce(each.value.name, "@")
+  ttl  = each.value.ttl
+  ptr  = each.value.data
 }
