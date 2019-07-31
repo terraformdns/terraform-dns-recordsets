@@ -48,12 +48,6 @@ cause recordsets to be removed and replaced by the next plan.
 This module requires the `dns` provider, which must be configured for dynamic
 updates using its `update` configuration block.
 
-Due to current limitations of the Terraform language, recordsets in the target
-server are correlated to `recordsets` elements using the index into the
-`recordsets` list. Adding or removing records from the list will therefore
-cause this module to also update all records with indices greater than where
-the addition or removal was made.
-
 ## Limitations
 
 This module supports only the following DNS record types, due to limitations
