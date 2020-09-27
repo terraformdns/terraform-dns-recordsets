@@ -6,6 +6,13 @@ terraform {
   }
 }
 
+module "normalize" {
+  source = "terraformdns/normalize-recordsets/template"
+
+  target_zone_name = var.zone_name
+  recordsets       = var.recordsets
+}
+
 # Since the DNS provider uses a separate resource type for each DNS record
 # type, we'll need to split up our input list.
 locals {
@@ -14,21 +21,12 @@ locals {
   # requires it so we'll add it now.
   zone_name = "${var.zone_name}."
 
-  recordsets       = { for rs in var.recordsets : rs.type => rs... }
+  recordsets       = { for rs in module.normalize.normalized : rs.type => rs... }
   a_recordsets     = lookup(local.recordsets, "A", [])
   aaaa_recordsets  = lookup(local.recordsets, "AAAA", [])
   cname_recordsets = lookup(local.recordsets, "CNAME", [])
-  ns_recordsets = [
-    for rs in lookup(local.recordsets, "NS", []) : {
-      name = rs.name
-      type = rs.type
-      ttl  = rs.ttl
-      records = [
-        for d in rs.records : substr(d, length(d) - 1, 1) == "." ? d : "${d}.${local.zone_name}"
-      ]
-    }
-  ]
-  ptr_recordsets = lookup(local.recordsets, "PTR", [])
+  ns_recordsets    = lookup(local.recordsets, "NS", [])
+  ptr_recordsets   = lookup(local.recordsets, "PTR", [])
 
   # Some of the resources only deal with one record at a time, and so we need
   # to flatten these.
@@ -38,7 +36,7 @@ locals {
         name = rs.name
         type = rs.type
         ttl  = rs.ttl
-        data = substr(r, length(r) - 1, 1) == "." ? r : "${r}.${local.zone_name}"
+        data = r
       }
     ]
   ])
@@ -52,23 +50,6 @@ locals {
       }
     ]
   ])
-
-  # With just our list splitting technique above, records of unsupported types
-  # would be silently ignored. The following two expressions ensure that
-  # such records will produce an error message instead, albeit not a very
-  # helpful one.
-  supported_record_types = {
-    A     = true
-    AAAA  = true
-    CNAME = true
-    NS    = true
-    PTR   = true
-  }
-  check_supported_types = [
-    # The index operation here will fail if one of the records has
-    # an unsupported type.
-    for rs in var.recordsets : local.supported_record_types[rs.type]
-  ]
 }
 
 resource "dns_a_record_set" "this" {
